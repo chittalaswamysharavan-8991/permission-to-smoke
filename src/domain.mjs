@@ -21,23 +21,25 @@ export function createInitialState(now = new Date()) {
 
 export function normalizeState(input, now = new Date()) {
   const base = createInitialState(now);
-  if (!input || typeof input !== "object") return base;
+  if (!isRecord(input)) return base;
+
+  const settings = normalizeSettings(input.settings, base.settings);
+  const sessions = Array.isArray(input.sessions)
+    ? input.sessions.map(normalizeCompletedSession).filter(Boolean).slice(0, 2000)
+    : [];
+
   return {
     version: STORAGE_VERSION,
-    createdAt: typeof input.createdAt === "string" ? input.createdAt : base.createdAt,
-    settings: {
-      ...DEFAULT_SETTINGS,
-      ...(input.settings && typeof input.settings === "object" ? input.settings : {})
-    },
-    sessions: Array.isArray(input.sessions)
-      ? input.sessions.filter((item) => item && typeof item === "object" && typeof item.id === "string")
-      : [],
-    activeSession:
-      input.activeSession && typeof input.activeSession === "object" ? input.activeSession : null
+    createdAt: isValidDate(input.createdAt) ? new Date(input.createdAt).toISOString() : base.createdAt,
+    settings,
+    sessions,
+    activeSession: normalizeActiveSession(input.activeSession, settings)
   };
 }
 
 export function startSession(state, details, now = new Date()) {
+  if (state.activeSession) return state;
+
   const intensity = clampNumber(details.intensity, 1, 5, 3);
   const delayMinutes = clampNumber(
     details.delayMinutes,
@@ -83,22 +85,11 @@ export function cancelSession(state) {
   return { ...state, activeSession: null };
 }
 
-export function updateSettings(state, patch) {
-  const next = {
-    ...state.settings,
-    dailyTarget: clampNumber(patch.dailyTarget, 0, 50, state.settings.dailyTarget),
-    defaultDelayMinutes: clampNumber(
-      patch.defaultDelayMinutes,
-      1,
-      60,
-      state.settings.defaultDelayMinutes
-    ),
-    baselinePerDay: clampNumber(patch.baselinePerDay, 0, 100, state.settings.baselinePerDay),
-    cigaretteCost: clampNumber(patch.cigaretteCost, 0, 10000, state.settings.cigaretteCost),
-    currency: sanitizeText(patch.currency ?? state.settings.currency, 4) || "₹",
-    reducedMotion: Boolean(patch.reducedMotion)
+export function updateSettings(state, patch = {}) {
+  return {
+    ...state,
+    settings: normalizeSettings(patch, state.settings)
   };
-  return { ...state, settings: next };
 }
 
 export function getDayKey(dateLike) {
@@ -165,7 +156,85 @@ export function serializeExport(state, now = new Date()) {
 export function parseImport(text, now = new Date()) {
   const parsed = JSON.parse(text);
   const candidate = parsed?.data ?? parsed;
+  if (!isRecord(candidate)) throw new Error("Invalid backup data");
   return normalizeState(candidate, now);
+}
+
+function normalizeSettings(input, fallback) {
+  const patch = isRecord(input) ? input : {};
+  return {
+    dailyTarget: clampNumber(patch.dailyTarget, 0, 50, fallback.dailyTarget),
+    defaultDelayMinutes: clampNumber(
+      patch.defaultDelayMinutes,
+      1,
+      60,
+      fallback.defaultDelayMinutes
+    ),
+    baselinePerDay: clampNumber(patch.baselinePerDay, 0, 100, fallback.baselinePerDay),
+    cigaretteCost: clampNumber(patch.cigaretteCost, 0, 10000, fallback.cigaretteCost),
+    currency: sanitizeCurrency(patch.currency, fallback.currency),
+    reducedMotion:
+      typeof patch.reducedMotion === "boolean" ? patch.reducedMotion : fallback.reducedMotion
+  };
+}
+
+function normalizeActiveSession(input, settings) {
+  if (!isRecord(input) || !isValidDate(input.startedAt) || !isValidDate(input.endsAt)) return null;
+  const startedAt = new Date(input.startedAt);
+  const endsAt = new Date(input.endsAt);
+  if (endsAt.getTime() < startedAt.getTime()) return null;
+
+  return {
+    id: sanitizeId(input.id) || `urge-restored-${startedAt.getTime()}`,
+    startedAt: startedAt.toISOString(),
+    endsAt: endsAt.toISOString(),
+    intensity: clampNumber(input.intensity, 1, 5, 3),
+    trigger: sanitizeText(input.trigger, 80),
+    note: sanitizeText(input.note, 240),
+    delayMinutes: clampNumber(input.delayMinutes, 1, 60, settings.defaultDelayMinutes),
+    status: "pausing"
+  };
+}
+
+function normalizeCompletedSession(input) {
+  if (
+    !isRecord(input) ||
+    !sanitizeId(input.id) ||
+    !["skipped", "smoked"].includes(input.outcome) ||
+    !isValidDate(input.completedAt)
+  ) {
+    return null;
+  }
+
+  const completedAt = new Date(input.completedAt);
+  const startedAt = isValidDate(input.startedAt) ? new Date(input.startedAt) : completedAt;
+  const endsAt = isValidDate(input.endsAt) ? new Date(input.endsAt) : completedAt;
+
+  return {
+    id: sanitizeId(input.id),
+    startedAt: startedAt.toISOString(),
+    endsAt: endsAt.toISOString(),
+    intensity: clampNumber(input.intensity, 1, 5, 3),
+    trigger: sanitizeText(input.trigger, 80),
+    note: sanitizeText(input.note, 240),
+    delayMinutes: clampNumber(input.delayMinutes, 1, 60, 10),
+    status: "completed",
+    outcome: input.outcome,
+    completedAt: completedAt.toISOString(),
+    waitedSeconds: clampNumber(input.waitedSeconds, 0, 86400, 0)
+  };
+}
+
+function sanitizeCurrency(value, fallback) {
+  const candidate = String(value ?? "").trim();
+  if (/^(?:[\p{Sc}]|[A-Za-z]{1,4})$/u.test(candidate)) return candidate;
+  return fallback || DEFAULT_SETTINGS.currency;
+}
+
+function sanitizeId(value) {
+  return String(value ?? "")
+    .replace(/[^A-Za-z0-9_-]/g, "")
+    .slice(0, 100);
 }
 
 function sanitizeText(value, maxLength) {
@@ -179,4 +248,12 @@ function clampNumber(value, min, max, fallback) {
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) return fallback;
   return Math.min(max, Math.max(min, Math.round(numeric * 100) / 100));
+}
+
+function isRecord(value) {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function isValidDate(value) {
+  return typeof value === "string" && Number.isFinite(new Date(value).getTime());
 }

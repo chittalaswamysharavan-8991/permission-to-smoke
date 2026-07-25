@@ -1,4 +1,4 @@
-const CACHE = "permission-to-smoke-v1";
+const CACHE = "permission-to-smoke-v1.0.1";
 const APP_SHELL = [
   "/",
   "/index.html",

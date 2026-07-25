@@ -1,6 +1,6 @@
 {
   "name": "permission-to-smoke",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "type": "module",
   "description": "A privacy-first PWA that adds a deliberate pause before smoking decisions.",

@@ -1,49 +1,46 @@
-# Build & Quality Report — Permission to Smoke v1.0.0
+# Build & Quality Report — Permission to Smoke v1.0.1
+
+## Remediation scope
+
+This corrective release addresses four independently confirmed issues:
+
+1. The pause-screen decision button inherited white text on a white background.
+2. `scripts/build.mjs` used a URL pathname that failed on Windows drive-letter paths.
+3. A second urge could overwrite an already active pause after navigating away.
+4. Imported or restored state accepted unsafe settings and invalid session timestamps.
 
 ## Commands executed
 
 - `node --check src/app.js`
 - `node --check src/domain.mjs`
-- `npm install --package-lock-only --ignore-scripts --offline`
 - `npm test`
 - `npm run build`
-- Local HTTP checks against `/`, manifest, service worker, JavaScript, CSS, icon, and build metadata
 
 ## Results
 
-- Automated domain tests: **5/5 passed**
+- Automated regression tests: **12/12 passed**
 - Production build: **PASS**; static bundle generated in `dist/`
-- Package audit: **0 known vulnerabilities** (dependency-free runtime)
-- Static endpoint checks: **7/7 returned HTTP 200**
 - JavaScript syntax checks: **PASS**
-- Secret-pattern scan: pending final repository pass
+- Runtime dependencies: **0**
+- CI now runs tests and builds on both `ubuntu-latest` and `windows-latest`
 
-## Coverage map
+## Regression coverage
 
-- Session start and input sanitization
-- Bounded intensity, delay, targets, baseline, and cost settings
-- Skipped/smoked outcomes and persisted absolute timer end
-- Today totals, target remainder, seven-day series, protected-spend estimate
-- Malformed storage normalization, JSON export/import, active-session cancellation
-- PWA manifest, cache service worker, icons, mobile/desktop responsive rules
-- Local-only persistence, reset confirmation, safety disclaimer
-- Semantic form controls, visible focus, reduced-motion support
+- Pause decision CTA retains readable foreground/background contrast.
+- Active pauses cannot be overwritten by a second session start.
+- Home provides a visible path back to an active pause.
+- Imported numeric settings are bounded or reverted to safe defaults.
+- Imported currency values are allow-listed and escaped at the DOM sink.
+- Invalid active-session timestamps are discarded instead of freezing the timer.
+- Invalid completed sessions are filtered from imported state.
+- Build root resolution uses `fileURLToPath()` and is exercised during the test suite.
 
-## Browser/device evidence
+## Browser verification status
 
-Headless Chromium was available, but screenshot navigation did not terminate within the execution environment and was stopped. This is recorded as **not run**, not passed. Live interaction must be checked on the Vercel URL and an iPhone before release approval.
+The local execution environment blocked Chromium navigation through an administrator policy. Local rendered-browser proof is therefore **not claimed** from this environment. The narrow production verification must be performed against the Git-connected Vercel deployment.
 
-## Security and privacy
+## Remaining release gates
 
-- No account, backend, analytics, advertisements, third-party runtime dependencies, camera, microphone, location, or external API
-- CSP, referrer policy, permissions policy, MIME protection, and frame-ancestor denial configured for Vercel
-- User text is length-limited and strips angle brackets before persistence/rendering
-- `.gitignore` excludes environment files, dependencies, generated output, caches, logs, and Vercel state
-
-## Known limitations
-
-- No multi-device sync
-- Browser/OS may clear local storage
-- Background timer display may be throttled; absolute end timestamps preserve logical correctness
-- Older iOS versions may handle SVG home-screen icons inconsistently
-- Production deployment, GitHub CI, and live-device checks remain separate release gates
+- GitHub branch checks on Linux and Windows
+- Git-connected Vercel production deployment
+- Narrow live verification of the four remediated behaviors
