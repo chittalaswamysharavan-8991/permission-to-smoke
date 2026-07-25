@@ -6,6 +6,10 @@ A privacy-first progressive web app that interrupts an automatic smoking impulse
 
 The app never grants approval to smoke and never uses shame. It asks the user to notice the urge, wait, and then honestly record whether they skipped or smoked.
 
+## Current release
+
+**v1.0.1** hardens imported state, preserves active pauses across navigation, restores readable pause-screen actions, and supports reproducible Windows builds.
+
 ## Features
 
 - Fast urge check-in: intensity, trigger, optional note
@@ -31,7 +35,7 @@ Open `http://localhost:4173`.
 
 ## Deploy
 
-The repository is Vercel-ready. Vercel should use the project root as the output source; `npm run build` produces `dist/`. Set the Output Directory to `dist` if automatic detection does not.
+The repository is connected to Vercel and deploys from the `main` branch. Vercel should run `npm run build` and publish the generated `dist/` directory.
 
 ## Data and privacy
 
